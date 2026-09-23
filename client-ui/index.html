@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Automata Marketplace</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 0; background: #0b1020; color: #e5eef7; }
+      .container { max-width: 1100px; margin: 0 auto; padding: 32px 20px; }
+      header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 18px; }
+      .brand { font-size: 1.8rem; font-weight: bold; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; }
+      .card { background: #121a2d; border: 1px solid #24304d; border-radius: 12px; padding: 18px; }
+      .agent { margin-bottom: 18px; }
+      button { background: #5ac8fa; border: none; color: #02131d; border-radius: 8px; padding: 10px 14px; font-weight: bold; cursor: pointer; }
+      .meta { color: #9bb5d1; font-size: 0.9rem; }
+      form { display: grid; gap: 12px; }
+      input, select, textarea { width: 100%; box-sizing: border-box; padding: 10px; border-radius: 8px; border: 1px solid #384d6e; background: #0f172a; color: white; }
+      .jobs { margin-top: 30px; }
+      .job { background: #0d1628; border: 1px solid #273a5f; border-radius: 10px; padding: 14px; margin-top: 12px; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <div class="brand">Automata</div>
+        <div class="meta">Intra-Galactic Agent Rental Network</div>
+      </header>
+
+      <section class="card" style="margin-bottom: 24px;">
+        <h2>Inter-stellar operations marketplace</h2>
+        <p class="meta">Browse approved agents, route your service request through the safest trade lanes, and dispatch fulfillment with a physics-aware verification layer.</p>
+      </section>
+
+      <section class="grid" id="agents"></section>
+
+      <section class="card" style="margin-top: 32px;">
+        <h2>Request a task</h2>
+        <form id="jobForm">
+          <label>
+            Client
+            <select id="clientId"></select>
+          </label>
+          <label>
+            Agent
+            <select id="agentId"></select>
+          </label>
+          <label>
+            Task description
+            <textarea id="task" rows="4" placeholder="Example: Route a customs compliance review for asteroid mining logistics across three systems."></textarea>
+          </label>
+          <label>
+            Duration (hours)
+            <input id="duration" type="number" min="1" value="2" />
+          </label>
+          <button type="submit">Submit job</button>
+        </form>
+      </section>
+
+      <section class="jobs">
+        <h2>Current jobs</h2>
+        <div id="jobs"></div>
+      </section>
+    </div>
+
+    <script>
+      const apiBase = 'http://localhost:5000';
+
+      async function fetchJson(url, options = {}) {
+        const response = await fetch(url, options);
+        if (!response.ok) {
+          throw new Error(`Request failed: ${response.status}`);
+        }
+        return response.json();
+      }
+
+      async function loadAgents() {
+        const agents = await fetchJson(`${apiBase}/agents`);
+        const agentSelect = document.getElementById('agentId');
+        const list = document.getElementById('agents');
+        list.innerHTML = '';
+        agentSelect.innerHTML = '';
+
+        agents.forEach((agent) => {
+          const option = document.createElement('option');
+          option.value = agent.id;
+          option.textContent = `${agent.name} — ${agent.kind}`;
+          agentSelect.appendChild(option);
+
+          const card = document.createElement('article');
+          card.className = 'card agent';
+          card.innerHTML = `
+            <h3>${agent.name}</h3>
+            <div class="meta">${agent.kind}</div>
+            <p>${agent.capability}</p>
+            <strong>$${Number(agent.rate_per_hour).toFixed(2)}/hr</strong>
+          `;
+          list.appendChild(card);
+        });
+      }
+
+      async function loadClients() {
+        const clients = await fetchJson(`${apiBase}/clients`);
+        const clientSelect = document.getElementById('clientId');
+        clientSelect.innerHTML = clients.map(client => 
+          `<option value="${client.id}">${client.company_name}</option>`
+        ).join('');
+      }
+
+      async function loadJobs() {
+        const jobs = await fetchJson(`${apiBase}/jobs`);
+        const jobsContainer = document.getElementById('jobs');
+        jobsContainer.innerHTML = jobs.map(job => `
+          <div class="job">
+            <strong>Job #${job.id}</strong>
+            <div class="meta">Client: ${job.client_name || 'Unknown'} | Agent: ${job.agent_name || 'Unknown'}</div>
+            <p>${job.task}</p>
+            <div class="meta">Status: ${job.status}</div>
+          </div>
+        `).join('');
+      }
+
+      document.getElementById('jobForm').addEventListener('submit', async (event) => {
+        event.preventDefault();
+
+        const payload = {
+          client_id: Number(document.getElementById('clientId').value),
+          agent_id: Number(document.getElementById('agentId').value),
+          task: document.getElementById('task').value,
+          duration_hours: Number(document.getElementById('duration').value || 1),
+        };
+
+        await fetchJson(`${apiBase}/jobs`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        document.getElementById('jobForm').reset();
+        document.getElementById('duration').value = 2;
+        await loadJobs();
+      });
+
+      async function init() {
+        await loadAgents();
+        await loadClients();
+        await loadJobs();
+      }
+
+      init();
+      setInterval(loadJobs, 5000);
+    </script>
+  </body>
+</html>
