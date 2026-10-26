@@ -16,6 +16,8 @@
       .meta { color: #9bb5d1; font-size: 0.9rem; }
       form { display: grid; gap: 12px; }
       input, select, textarea { width: 100%; box-sizing: border-box; padding: 10px; border-radius: 8px; border: 1px solid #384d6e; background: #0f172a; color: white; }
+      #assistantAnswer { white-space: pre-wrap; line-height: 1.5; }
+      .notice { color: #ffcf88; }
       .jobs { margin-top: 30px; }
       .job { background: #0d1628; border: 1px solid #273a5f; border-radius: 10px; padding: 14px; margin-top: 12px; }
     </style>
@@ -33,6 +35,19 @@
       </section>
 
       <section class="grid" id="agents"></section>
+
+      <section class="card" style="margin-top: 32px;">
+        <h2>Inventory Assistant</h2>
+        <p class="meta">Ask about stock by item name or SKU, or ask which items are low. This demo assistant is read-only and does not place orders.</p>
+        <form id="assistantForm">
+          <label>
+            Your question
+            <textarea id="assistantQuery" rows="2" maxlength="500" required placeholder="Example: Which items are low in stock?"></textarea>
+          </label>
+          <button id="assistantSubmit" type="submit">Ask about inventory</button>
+        </form>
+        <p id="assistantAnswer" aria-live="polite"></p>
+      </section>
 
       <section class="card" style="margin-top: 32px;">
         <h2>Request a task</h2>
@@ -139,6 +154,30 @@
         document.getElementById('jobForm').reset();
         document.getElementById('duration').value = 2;
         await loadJobs();
+      });
+
+      document.getElementById('assistantForm').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const queryInput = document.getElementById('assistantQuery');
+        const submitButton = document.getElementById('assistantSubmit');
+        const answer = document.getElementById('assistantAnswer');
+        submitButton.disabled = true;
+        answer.className = '';
+        answer.textContent = 'Checking inventory...';
+
+        try {
+          const result = await fetchJson(`${apiBase}/assistant/chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: queryInput.value })
+          });
+          answer.textContent = result.answer;
+        } catch (error) {
+          answer.className = 'notice';
+          answer.textContent = `Unable to check inventory: ${error.message}`;
+        } finally {
+          submitButton.disabled = false;
+        }
       });
 
       async function init() {

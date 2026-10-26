@@ -9,15 +9,22 @@ from flask_cors import CORS
 from kafka import KafkaProducer
 from psycopg2.extras import RealDictCursor
 
+from inventory_assistant import answer_inventory_query
+
 app = Flask(__name__)
 CORS(app)
 
-DB_URL = os.environ.get('DATABASE_URL', 'postgresql://app_user:SecurePassword123!@localhost:5432/automata')
+DB_CONFIG = {
+    'host': os.environ.get('PGHOST', 'localhost'),
+    'dbname': os.environ.get('PGDATABASE', 'automata'),
+    'user': os.environ.get('PGUSER', 'app_user'),
+    'password': os.environ.get('PGPASSWORD'),
+}
 KAFKA_BOOTSTRAP_SERVERS = os.environ.get('KAFKA_BOOTSTRAP_SERVERS', 'localhost:9092')
 
 
 def get_db_connection():
-    return psycopg2.connect(DB_URL, cursor_factory=RealDictCursor)
+    return psycopg2.connect(**DB_CONFIG, cursor_factory=RealDictCursor)
 
 
 def get_kafka_producer() -> Optional[KafkaProducer]:
@@ -73,6 +80,18 @@ def initialize_database():
             )
             cur.execute(
                 """
+                CREATE TABLE IF NOT EXISTS inventory_items (
+                    id SERIAL PRIMARY KEY,
+                    sku VARCHAR(50) NOT NULL UNIQUE,
+                    name VARCHAR(150) NOT NULL UNIQUE,
+                    quantity INTEGER NOT NULL CHECK (quantity >= 0),
+                    reorder_point INTEGER NOT NULL CHECK (reorder_point >= 0),
+                    target_stock INTEGER NOT NULL CHECK (target_stock >= reorder_point)
+                );
+                """
+            )
+            cur.execute(
+                """
                 INSERT INTO agents (name, kind, capability, rate_per_hour, status)
                 VALUES
                     ('Atlas', 'Research Agent', 'Threat intelligence and reconnaissance', 85.00, 'available'),
@@ -89,6 +108,18 @@ def initialize_database():
                     ('Northstar Secure', 'security@northstar.example', 'active'),
                     ('Blue Harbor', 'dm@blueharbor.example', 'active')
                 ON CONFLICT (contact_email) DO NOTHING;
+                """
+            )
+            cur.execute(
+                """
+                INSERT INTO inventory_items (sku, name, quantity, reorder_point, target_stock)
+                VALUES
+                    ('FLT-100', 'Nebula Filter', 4, 5, 20),
+                    ('CRY-210', 'Cryo Cell', 18, 6, 24),
+                    ('SEAL-305', 'Docking Seal', 7, 10, 30),
+                    ('CAB-440', 'Quantum Cable', 42, 12, 48),
+                    ('SEN-520', 'Cargo Sensor', 0, 4, 16)
+                ON CONFLICT (sku) DO NOTHING;
                 """
             )
             conn.commit()
@@ -129,6 +160,34 @@ def get_jobs():
                 """
             )
             return jsonify(cur.fetchall()), 200
+
+
+@app.route('/inventory', methods=['GET'])
+def get_inventory():
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute('SELECT * FROM inventory_items ORDER BY name;')
+            return jsonify(cur.fetchall()), 200
+
+
+@app.route('/assistant/chat', methods=['POST'])
+def chat_with_inventory_assistant():
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({'error': 'A JSON object with a query is required'}), 400
+
+    query = payload.get('query')
+    if not isinstance(query, str) or not query.strip():
+        return jsonify({'error': 'query must be a non-empty string'}), 400
+    if len(query) > 500:
+        return jsonify({'error': 'query must be 500 characters or fewer'}), 400
+
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute('SELECT * FROM inventory_items ORDER BY name;')
+            inventory = cur.fetchall()
+
+    return jsonify(answer_inventory_query(query.strip(), inventory)), 200
 
 
 @app.route('/jobs', methods=['POST'])
@@ -174,4 +233,5 @@ def seed_demo_data():
 
 if __name__ == '__main__':
     initialize_database()
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    debug = os.environ.get('FLASK_DEBUG', '').strip().lower() in {'1', 'true', 'yes', 'on'}
+    app.run(host='0.0.0.0', port=5000, debug=debug)

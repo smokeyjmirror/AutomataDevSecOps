@@ -26,6 +26,15 @@ CREATE TABLE IF NOT EXISTS jobs (
     completed_at TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS inventory_items (
+    id SERIAL PRIMARY KEY,
+    sku VARCHAR(50) NOT NULL UNIQUE,
+    name VARCHAR(150) NOT NULL UNIQUE,
+    quantity INTEGER NOT NULL CHECK (quantity >= 0),
+    reorder_point INTEGER NOT NULL CHECK (reorder_point >= 0),
+    target_stock INTEGER NOT NULL CHECK (target_stock >= reorder_point)
+);
+
 INSERT INTO agents (name, kind, capability, rate_per_hour, status)
 VALUES
     ('Atlas', 'Research Agent', 'Threat intelligence and reconnaissance', 85.00, 'available'),
@@ -39,3 +48,12 @@ VALUES
     ('Northstar Secure', 'security@northstar.example', 'active'),
     ('Blue Harbor', 'dm@blueharbor.example', 'active')
 ON CONFLICT (contact_email) DO NOTHING;
+
+INSERT INTO inventory_items (sku, name, quantity, reorder_point, target_stock)
+VALUES
+    ('FLT-100', 'Nebula Filter', 4, 5, 20),
+    ('CRY-210', 'Cryo Cell', 18, 6, 24),
+    ('SEAL-305', 'Docking Seal', 7, 10, 30),
+    ('CAB-440', 'Quantum Cable', 42, 12, 48),
+    ('SEN-520', 'Cargo Sensor', 0, 4, 16)
+ON CONFLICT (sku) DO NOTHING;

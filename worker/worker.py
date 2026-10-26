@@ -5,12 +5,17 @@ import time
 import psycopg2
 from kafka import KafkaConsumer
 
-DB_URL = os.environ.get('DATABASE_URL', 'postgresql://app_user:SecurePassword123!@localhost:5432/automata')
+DB_CONFIG = {
+    'host': os.environ.get('PGHOST', 'localhost'),
+    'dbname': os.environ.get('PGDATABASE', 'automata'),
+    'user': os.environ.get('PGUSER', 'app_user'),
+    'password': os.environ.get('PGPASSWORD'),
+}
 KAFKA_BOOTSTRAP_SERVERS = os.environ.get('KAFKA_BOOTSTRAP_SERVERS', 'localhost:9092')
 
 
 def get_db_connection():
-    return psycopg2.connect(DB_URL)
+    return psycopg2.connect(**DB_CONFIG)
 
 
 def process_message(message):

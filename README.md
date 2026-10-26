@@ -29,6 +29,17 @@ The Lean examples live in the `lean/` folder and model rules such as: a service 
 
 ## Quick start
 
+Create a local environment file and replace the placeholder password with a
+unique value before starting the services:
+
+```bash
+cp .env.example .env
+```
+
+For an existing PostgreSQL volume, changing `POSTGRES_PASSWORD` in `.env` does
+not change the password stored in that database. Keep the existing password or
+update the database role before changing it.
+
 ```bash
 cd automata-platform
 docker compose up --build
@@ -48,3 +59,11 @@ Then open:
 3. The API stores the request and publishes a Kafka event.
 4. The worker processes the event and marks the corresponding job as completed.
 5. Admins can watch job status in the dashboard.
+
+## Inventory Assistant
+
+The client portal includes a read-only Inventory Assistant backed by demo
+inventory seeded by the API and PostgreSQL initialization script. Ask for an
+item by name or SKU to see its quantity and reorder point, or ask which items
+are low in stock to get suggested reorder quantities. Suggestions are
+informational only; the assistant does not change stock or place orders.
