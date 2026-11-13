@@ -118,3 +118,36 @@ inventory seeded by the API and PostgreSQL initialization script. Ask for an
 item by name or SKU to see its quantity and reorder point, or ask which items
 are low in stock to get suggested reorder quantities. Suggestions are
 informational only; the assistant does not change stock or place orders.
+
+## Customer demo agent
+
+The `demo-agents` Playwright project contains a deterministic customer persona
+that uses the real client portal and Keycloak sign-in. It asks the Inventory
+Assistant which items are low, submits an operations request, and watches the
+worker update that request to `completed`. The inventory assistant is read-only;
+the demo does create a job in the local database each time it runs.
+
+Start the local services with `docker compose up --build`, then create a
+dedicated Keycloak customer whose verified email matches an active seeded
+client, such as `ops@apexlabs.example`, and assign the `customer` role. Add the
+account credentials to the root `.env` file (the demo loads it automatically).
+Set the email too if the Keycloak username differs from the verified email:
+
+```bash
+DEMO_CUSTOMER_USERNAME=ops@apexlabs.example
+DEMO_CUSTOMER_EMAIL=ops@apexlabs.example
+DEMO_CUSTOMER_PASSWORD=your-local-demo-password
+```
+
+Then run:
+
+```bash
+npm --prefix demo-agents ci
+npm --prefix demo-agents run install:browsers
+npm --prefix demo-agents run demo:customer
+```
+
+`demo:customer` opens a visible Chromium browser and slows down its actions so
+you can watch the flow. To run the same assertions headlessly, use
+`npm --prefix demo-agents test`. Set `AUTOMATA_CLIENT_URL` if the client portal
+is not available at `http://localhost:8000`.
