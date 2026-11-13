@@ -20,13 +20,19 @@
       .notice { color: #ffcf88; }
       .jobs { margin-top: 30px; }
       .job { background: #0d1628; border: 1px solid #273a5f; border-radius: 10px; padding: 14px; margin-top: 12px; }
+      .auth { display: flex; gap: 12px; align-items: center; }
+      .error { color: #ff8a8a; }
     </style>
   </head>
   <body>
     <div class="container">
       <header>
         <div class="brand">Automata</div>
-        <div class="meta">Intra-Galactic Agent Rental Network</div>
+        <div class="auth">
+          <span id="identity" class="meta">Checking sign-in...</span>
+          <button id="loginButton" type="button" hidden>Sign in</button>
+          <button id="logoutButton" type="button" hidden>Sign out</button>
+        </div>
       </header>
 
       <section class="card" style="margin-bottom: 24px;">
@@ -51,11 +57,8 @@
 
       <section class="card" style="margin-top: 32px;">
         <h2>Request a task</h2>
-        <form id="jobForm">
-          <label>
-            Client
-            <select id="clientId"></select>
-          </label>
+        <p id="jobMessage" class="meta" aria-live="polite"></p>
+        <form id="jobForm" hidden>
           <label>
             Agent
             <select id="agentId"></select>
@@ -72,7 +75,7 @@
         </form>
       </section>
 
-      <section class="jobs">
+      <section class="jobs" id="jobsSection" hidden>
         <h2>Current jobs</h2>
         <div id="jobs"></div>
       </section>
@@ -82,11 +85,12 @@
       const apiBase = 'http://localhost:5000';
 
       async function fetchJson(url, options = {}) {
-        const response = await fetch(url, options);
+        const response = await fetch(url, { credentials: 'include', ...options });
         if (!response.ok) {
-          throw new Error(`Request failed: ${response.status}`);
+          const result = await response.json().catch(() => ({}));
+          throw new Error(result.error || `Request failed: ${response.status}`);
         }
-        return response.json();
+        return response.status === 204 ? null : response.json();
       }
 
       async function loadAgents() {
@@ -114,46 +118,55 @@
         });
       }
 
-      async function loadClients() {
-        const clients = await fetchJson(`${apiBase}/clients`);
-        const clientSelect = document.getElementById('clientId');
-        clientSelect.innerHTML = clients.map(client => 
-          `<option value="${client.id}">${client.company_name}</option>`
-        ).join('');
-      }
-
       async function loadJobs() {
         const jobs = await fetchJson(`${apiBase}/jobs`);
         const jobsContainer = document.getElementById('jobs');
-        jobsContainer.innerHTML = jobs.map(job => `
-          <div class="job">
-            <strong>Job #${job.id}</strong>
-            <div class="meta">Client: ${job.client_name || 'Unknown'} | Agent: ${job.agent_name || 'Unknown'}</div>
-            <p>${job.task}</p>
-            <div class="meta">Status: ${job.status}</div>
-          </div>
-        `).join('');
+        const cards = jobs.map((job) => {
+          const card = document.createElement('article');
+          card.className = 'job';
+          const title = document.createElement('strong');
+          title.textContent = `Job #${job.id}`;
+          const details = document.createElement('div');
+          details.className = 'meta';
+          details.textContent = `Client: ${job.client_name || 'Unknown'} | Agent: ${job.agent_name || 'Unknown'}`;
+          const task = document.createElement('p');
+          task.textContent = job.task;
+          const status = document.createElement('div');
+          status.className = 'meta';
+          status.textContent = `Status: ${job.status}`;
+          card.append(title, details, task, status);
+          return card;
+        });
+        jobsContainer.replaceChildren(...cards);
       }
 
       document.getElementById('jobForm').addEventListener('submit', async (event) => {
         event.preventDefault();
 
         const payload = {
-          client_id: Number(document.getElementById('clientId').value),
           agent_id: Number(document.getElementById('agentId').value),
           task: document.getElementById('task').value,
           duration_hours: Number(document.getElementById('duration').value || 1),
         };
 
-        await fetchJson(`${apiBase}/jobs`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
+        const message = document.getElementById('jobMessage');
+        message.textContent = 'Submitting request...';
+        message.className = 'meta';
+        try {
+          await fetchJson(`${apiBase}/jobs`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
 
-        document.getElementById('jobForm').reset();
-        document.getElementById('duration').value = 2;
-        await loadJobs();
+          document.getElementById('jobForm').reset();
+          document.getElementById('duration').value = 2;
+          message.textContent = 'Request submitted.';
+          await loadJobs();
+        } catch (error) {
+          message.className = 'error';
+          message.textContent = `Unable to submit request: ${error.message}`;
+        }
       });
 
       document.getElementById('assistantForm').addEventListener('submit', async (event) => {
@@ -181,13 +194,53 @@
       });
 
       async function init() {
-        await loadAgents();
-        await loadClients();
-        await loadJobs();
+        const identityLabel = document.getElementById('identity');
+        try {
+          const identity = await fetchJson(`${apiBase}/auth/me`);
+          if (!identity.roles.includes('customer')) {
+            identityLabel.textContent = 'A customer account is required.';
+            document.getElementById('jobForm').hidden = true;
+            return;
+          }
+          identityLabel.textContent = identity.email || identity.sub;
+          document.getElementById('logoutButton').hidden = false;
+          document.getElementById('jobForm').hidden = false;
+          document.getElementById('jobsSection').hidden = false;
+          await loadAgents();
+          await loadJobs();
+          setInterval(() => loadJobs().catch((error) => {
+            document.getElementById('identity').textContent =
+              `Unable to refresh requests: ${error.message}`;
+          }), 5000);
+        } catch (error) {
+          if (error.message === 'Authentication required') {
+            document.getElementById('loginButton').hidden = false;
+            identityLabel.textContent = 'Sign in to view your requests.';
+          } else {
+            identityLabel.textContent = `Unable to load account: ${error.message}`;
+          }
+        }
       }
 
+      document.getElementById('loginButton').addEventListener('click', () => {
+        const returnTo = encodeURIComponent(window.location.origin);
+        window.location.href = `${apiBase}/auth/login?return_to=${returnTo}`;
+      });
+
+      document.getElementById('logoutButton').addEventListener('click', async () => {
+        try {
+          const returnTo = encodeURIComponent(window.location.origin);
+          const result = await fetchJson(
+            `${apiBase}/auth/logout?return_to=${returnTo}`,
+            { method: 'POST' }
+          );
+          window.location.href = result.redirect_url;
+        } catch (error) {
+          document.getElementById('identity').textContent = `Unable to sign out: ${error.message}`;
+        }
+      });
+
       init();
-      setInterval(loadJobs, 5000);
     </script>
   </body>
 </html>

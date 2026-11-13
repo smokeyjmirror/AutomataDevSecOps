@@ -29,12 +29,22 @@ The Lean examples live in the `lean/` folder and model rules such as: a service 
 
 ## Quick start
 
-Create a local environment file and replace the placeholder password with a
-unique value before starting the services:
+Create a local environment file and replace all placeholder values, including
+the database password, Flask signing key, and local Keycloak admin password:
 
 ```bash
 cp .env.example .env
 ```
+
+Generate a Flask signing key with:
+
+```bash
+python -c "import secrets; print(secrets.token_hex(32))"
+```
+
+Paste the generated value into `FLASK_SECRET_KEY` in `.env`. For an existing
+`.env`, add the new variables from `.env.example` without replacing your
+existing database credentials.
 
 For an existing PostgreSQL volume, changing `POSTGRES_PASSWORD` in `.env` does
 not change the password stored in that database. Keep the existing password or
@@ -51,14 +61,55 @@ Then open:
 - Admin UI: http://localhost:8001
 - API: http://localhost:5000
 - Database: localhost:5432
+- Local identity provider: http://localhost:8080
+
+## Local OIDC sign-in
+
+The local setup uses Keycloak as a real OpenID Connect provider; it does not
+spoof users or bypass authentication. The app uses the standard authorization
+code flow with PKCE, validates the ID token signature, issuer, audience, expiry,
+nonce, and role claim, and then creates a short-lived, HTTP-only Flask session.
+The Keycloak admin port is bound to loopback and is not exposed on other
+interfaces.
+
+The imported `automata` realm creates the `automata-app` client and the
+`customer` and `staff` realm roles. After Keycloak starts:
+
+1. Sign in to the local Keycloak admin console at http://localhost:8080/admin
+   using `KEYCLOAK_ADMIN_USERNAME` and `KEYCLOAK_ADMIN_PASSWORD` from `.env`.
+2. Select the `automata` realm and create a user for a customer. Use an email
+   matching an active client in the seeded database (for example
+   `ops@apexlabs.example`), mark the email verified, set a local password, and
+   assign the `customer` realm role.
+3. Create a separate staff user, mark its email verified, set a local password,
+   and assign the `staff` realm role.
+4. Open either UI and use **Sign in**. Customer users see only jobs belonging
+   to the client matching their verified email; staff users can access the
+   operations dashboard.
+
+The app's OIDC integration is provider-neutral. `OIDC_ISSUER`,
+`OIDC_DISCOVERY_URL`, `OIDC_CLIENT_ID`, claim names, roles, and optional
+authorization/token/JWKS endpoint overrides are environment-configurable.
+The endpoint overrides let the browser use the host-visible authorization URL
+while the API container uses Keycloak's internal Docker-network URLs. For a
+different provider, register the callback URL
+`http://localhost:5000/auth/callback`, enable authorization code + PKCE
+(S256), and configure equivalent roles and verified-email claims.
+
+This is a local development setup, not an externally deployable security
+configuration: Keycloak runs in development mode over HTTP, and the session
+cookie is not marked `Secure`. Use HTTPS, set `SESSION_COOKIE_SECURE=true`, and
+apply deployment-specific secret, proxy, and session-storage controls before
+exposing the app beyond this VM.
 
 ## Example workflow
 
-1. View agents in the client portal.
-2. Submit a task request for an agent.
+1. Sign in as a customer in the client portal and browse agents.
+2. Submit a task request; the API derives the client account from the verified
+   OIDC email rather than accepting a client ID from the browser.
 3. The API stores the request and publishes a Kafka event.
 4. The worker processes the event and marks the corresponding job as completed.
-5. Admins can watch job status in the dashboard.
+5. Customers see their own jobs; staff can watch all jobs in the dashboard.
 
 ## Inventory Assistant
 

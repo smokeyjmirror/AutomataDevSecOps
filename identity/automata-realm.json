@@ -1,0 +1,50 @@
+{
+  "realm": "automata",
+  "enabled": true,
+  "displayName": "Automata Local",
+  "sslRequired": "none",
+  "roles": {
+    "realm": [
+      { "name": "customer" },
+      { "name": "staff" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "automata-app",
+      "name": "Automata browser apps",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": [
+        "http://localhost:5000/auth/callback"
+      ],
+      "webOrigins": [
+        "http://localhost:8000",
+        "http://localhost:8001"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:8000##http://localhost:8001"
+      },
+      "protocolMappers": [
+        {
+          "name": "automata-roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "multivalued": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "roles",
+            "jsonType.label": "String"
+          }
+        }
+      ]
+    }
+  ]
+}

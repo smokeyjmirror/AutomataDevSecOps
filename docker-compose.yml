@@ -46,6 +46,19 @@ services:
     ports:
       - "9092:9092"
 
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.1.4
+    container_name: automata-keycloak
+    command: ["start-dev", "--import-realm", "--hostname", "http://localhost:8080"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USERNAME:?Set KEYCLOAK_ADMIN_USERNAME in .env}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?Set KEYCLOAK_ADMIN_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - keycloak_data:/opt/keycloak/data
+      - ./identity/automata-realm.json:/opt/keycloak/data/import/automata-realm.json:ro
+
   api:
     build: ./api
     container_name: automata-api
@@ -57,11 +70,31 @@ services:
       PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       FLASK_DEBUG: ${FLASK_DEBUG:-false}
+      FLASK_SECRET_KEY: ${FLASK_SECRET_KEY:?Set FLASK_SECRET_KEY in .env}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
+      FRONTEND_ORIGINS: ${FRONTEND_ORIGINS:-http://localhost:8000,http://localhost:8001}
+      OIDC_ISSUER: ${OIDC_ISSUER:-http://localhost:8080/realms/automata}
+      OIDC_DISCOVERY_URL: ${OIDC_DISCOVERY_URL:-http://keycloak:8080/realms/automata/.well-known/openid-configuration}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-automata-app}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      OIDC_REDIRECT_URI: ${OIDC_REDIRECT_URI:-http://localhost:5000/auth/callback}
+      OIDC_AUTHORIZATION_ENDPOINT: ${OIDC_AUTHORIZATION_ENDPOINT:-http://localhost:8080/realms/automata/protocol/openid-connect/auth}
+      OIDC_TOKEN_ENDPOINT: ${OIDC_TOKEN_ENDPOINT:-http://keycloak:8080/realms/automata/protocol/openid-connect/token}
+      OIDC_JWKS_URI: ${OIDC_JWKS_URI:-http://keycloak:8080/realms/automata/protocol/openid-connect/certs}
+      OIDC_LOGOUT_ENDPOINT: ${OIDC_LOGOUT_ENDPOINT:-}
+      OIDC_ROLES_CLAIM: ${OIDC_ROLES_CLAIM:-roles}
+      OIDC_CUSTOMER_ROLE: ${OIDC_CUSTOMER_ROLE:-customer}
+      OIDC_STAFF_ROLE: ${OIDC_STAFF_ROLE:-staff}
+      OIDC_EMAIL_CLAIM: ${OIDC_EMAIL_CLAIM:-email}
+      OIDC_EMAIL_VERIFIED_CLAIM: ${OIDC_EMAIL_VERIFIED_CLAIM:-email_verified}
+      OIDC_TOKEN_AUTH_METHOD: ${OIDC_TOKEN_AUTH_METHOD:-client_secret_basic}
+      OIDC_SCOPE: ${OIDC_SCOPE:-openid profile email}
     ports:
       - "5000:5000"
     depends_on:
       - postgres
       - kafka
+      - keycloak
 
   worker:
     build: ./worker
@@ -99,3 +132,4 @@ services:
 
 volumes:
   postgres_data:
+  keycloak_data:
