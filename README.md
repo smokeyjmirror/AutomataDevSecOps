@@ -121,23 +121,16 @@ informational only; the assistant does not change stock or place orders.
 
 ## Customer demo agent
 
-The `demo-agents` Playwright project contains a deterministic customer persona
-that uses the real client portal and Keycloak sign-in. It asks the Inventory
-Assistant which items are low, submits an operations request, and watches the
-worker update that request to `completed`. The inventory assistant is read-only;
-the demo does create a job in the local database each time it runs.
+The `demo-agents` Playwright project exercises the client portal, inventory
+assistant, job API, and worker. To avoid depending on Keycloak while testing
+that workflow, the demo creates a test-only customer session using Flask's
+test client in the running API container. This does not add a login bypass to
+the application, and the demo does not test OIDC or Keycloak authentication.
+The test identity uses the seeded `ops@apexlabs.example` customer; the demo
+creates a job in the local database each time it runs.
 
-Start the local services with `docker compose up --build`, then create a
-dedicated Keycloak customer whose verified email matches an active seeded
-client, such as `ops@apexlabs.example`, and assign the `customer` role. Add the
-account credentials to the root `.env` file (the demo loads it automatically).
-Set the email too if the Keycloak username differs from the verified email:
-
-```bash
-DEMO_CUSTOMER_USERNAME=ops@apexlabs.example
-DEMO_CUSTOMER_EMAIL=ops@apexlabs.example
-DEMO_CUSTOMER_PASSWORD=your-local-demo-password
-```
+Start the local services with `docker compose up --build`. No Keycloak user or
+`DEMO_CUSTOMER_*` credentials are needed for this Playwright demo.
 
 Then run:
 
@@ -147,7 +140,9 @@ npm --prefix demo-agents run install:browsers
 npm --prefix demo-agents run demo:customer
 ```
 
-`demo:customer` opens a visible Chromium browser and slows down its actions so
-you can watch the flow. To run the same assertions headlessly, use
-`npm --prefix demo-agents test`. Set `AUTOMATA_CLIENT_URL` if the client portal
-is not available at `http://localhost:8000`.
+`demo:customer` opens a visible Chromium browser, slows its actions, and pauses
+at key steps so you can watch the flow. To run the same assertions headlessly,
+use `npm --prefix demo-agents test`. Set `AUTOMATA_CLIENT_URL` if the client
+portal is not available at `http://localhost:8000`. This mock session is
+intended only for the local Playwright demo; normal application sign-in still
+uses Keycloak.

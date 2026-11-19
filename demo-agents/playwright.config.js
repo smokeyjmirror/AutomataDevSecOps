@@ -13,7 +13,7 @@ module.exports = defineConfig({
   use: {
     baseURL: process.env.AUTOMATA_CLIENT_URL || 'http://localhost:8000',
     launchOptions: {
-      slowMo: watchingDemo ? 350 : 0,
+      slowMo: watchingDemo ? 750 : 0,
     },
   },
   reporter: 'list',
