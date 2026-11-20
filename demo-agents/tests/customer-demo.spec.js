@@ -4,12 +4,10 @@ const path = require('node:path');
 
 const demoEmail = 'ops@apexlabs.example';
 const repositoryRoot = path.resolve(__dirname, '../..');
-const demoPauseMs = process.argv.includes('--headed') ? 1200 : 0;
+const demoPauseMs = 4000;
 
 async function pauseForDemo(page) {
-  if (demoPauseMs > 0) {
-    await page.waitForTimeout(demoPauseMs);
-  }
+  await page.waitForTimeout(demoPauseMs);
 }
 
 function createTestSessionCookie() {
